@@ -28,7 +28,7 @@ class wellnessDataset(Dataset):
         answer = {i:v[idx] for i,v in self.answer.items()}
         labels = answer['input_ids'][:]
         return {'input_ids':question['input_ids'],'attention_mask':question['attention_mask'],
-                'decoder_input_ids':answer['input_ids'],'decoder_attention_mask':answer['attention_mask'],
+                # 'decoder_input_ids':answer['input_ids'],'decoder_attention_mask':answer['attention_mask'],
                 'labels':labels}
 
 
