@@ -3,13 +3,23 @@ from transformers import BartForConditionalGeneration,Seq2SeqTrainingArguments,D
 from kobart import get_pytorch_kobart_model, get_kobart_tokenizer
 from dataset import wellnessDataset
 import torch
+from datasets import load_metric
 def train(args):
     model = BartForConditionalGeneration.from_pretrained(get_pytorch_kobart_model())
     dataset = wellnessDataset('../Chatbot_data/ChatbotData.csv')
     tokenizer = get_kobart_tokenizer()
     print(len(dataset))
     x = int(len(dataset) * 0.8)
-    train_set, val_set = torch.utils.data.random_split(dataset, [len(dataset)-x,x])
+    train_set, val_set = torch.utils.data.random_split(dataset, [x,len(dataset)-x])
+    print(len(train_set))
+    print(len(val_set))
+    metric = load_metric("squad")
+    print(metric)
+
+    def compute_metrics(p):
+        x = metric.compute(predictions=p.predictions, references=p.label_ids)
+        x = {'eval_exact_match':x['exact_match'],'eval_f1':x['f1']}
+        return x
     training_args = Seq2SeqTrainingArguments(
         output_dir="./results",  # output directory
         save_total_limit=5,  # number of total save model.
@@ -38,7 +48,7 @@ def train(args):
         train_dataset=train_set,
         eval_dataset=val_set ,
         tokenizer=tokenizer,
-        # data_collator=data_collator
+        # compute_metrics=compute_metrics
 )
     trainer.train()
     trainer.save_model()
@@ -47,10 +57,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument("--batch_size", type=int, default=16, help="model name")
     parser.add_argument("--device", type=str, default="cuda", help="device")
-    parser.add_argument("--epochs", type=int, default=1, help="epochs")
-    parser.add_argument("--learning_rate", type=float, default=10e-5, help="dataset")
+    parser.add_argument("--learning_rate", type=float, default=2e-5, help="dataset")
     parser.add_argument("--save_steps", type=int, default=200, help="dataset")
-    parser.add_argument("--num_train_epochs", type=int, default=3, help="dataset")
+    parser.add_argument("--num_train_epochs", type=int, default=5, help="dataset")
     parser.add_argument("--warmup_steps", type=int, default=500, help="dataset")
     parser.add_argument("--weight_decay", type=float, default=0.01, help="dataset")
     args = parser.parse_args()
