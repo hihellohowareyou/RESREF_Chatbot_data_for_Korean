@@ -2,7 +2,7 @@
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from transformers import ElectraModel, ElectraTokenizer,ElectraTokenizer
+from transformers import BertModel, ElectraTokenizer,ElectraTokenizer,AutoTokenizer
 
 class bert:
     def __init__(self):
@@ -11,7 +11,7 @@ class bert:
 class polyEncoder(nn.Module):
     def __init__(self):
         super().__init__()
-        self.bert = ElectraModel.from_pretrained("monologg/koelectra-base-v3-discriminator")
+        self.bert = BertModel.from_pretrained("klue/bert-base")
         hidden_size = 768
         self.poly_m = 3
         self.poly_code_embeddings = nn.Embedding(self.poly_m, hidden_size)
@@ -58,10 +58,13 @@ class polyEncoder(nn.Module):
             cand_emb = cand_emb.expand(batch_size, batch_size, cand_emb.shape[2]) # [bs, bs, dim]
             ctx_emb = self.dot_attention(cand_emb, embs, embs).squeeze() # [bs, bs, dim]
             dot_product = (ctx_emb*cand_emb).sum(-1) # [bs, bs]
-            mask = torch.eye(batch_size).to(context_input_ids.device) # [bs, bs]
-            loss = F.log_softmax(dot_product, dim=-1) * mask
-            loss = (-loss.sum(dim=1)).mean()
-            return loss
+            target = torch.arange(batch_size, dtype=torch.long).to(context_input_ids.device)
+            # mask = torch.eye(batch_size).to(context_input_ids.device) # [bs, bs]
+            loss = F.cross_entropy(dot_product,target)
+            retrieval_pred = torch.argmax(dot_product, -1)
+
+            correct = torch.sum(retrieval_pred == target).to("cpu")
+            return loss,correct
         else:
             ctx_emb = self.dot_attention(cand_emb, embs, embs) # [bs, res_cnt, dim]
             dot_product = (ctx_emb*cand_emb).sum(-1)
@@ -70,14 +73,19 @@ class polyEncoder(nn.Module):
 from torch.utils.data import Dataset
 import pandas as pd
 from kobart import get_kobart_tokenizer
+"""
+정답이 겹치는 경우가 있어서 이를 처리해주어야한다."""
 
 class polyDataset(Dataset):
     def __init__(self,path,max_seq_len=256):
         self.max_seq_len = max_seq_len
-        self.tokenizer = get_kobart_tokenizer()
+        self.tokenizer = AutoTokenizer.from_pretrained('klue/bert-base')
         self.bos_token = self.tokenizer.bos_token
         self.eos_token = self.tokenizer.eos_token
         csv_file = pd.read_csv(path)
+        print(f'before {len(csv_file)}')
+        csv_file = csv_file.drop_duplicates(['A'])
+        print(f'before {len(csv_file)}')
         self.quesion = csv_file['Q']
         self.quesion = self.tokenizer(self.quesion.tolist(),padding=True,return_tensors='pt')
         self.answer = csv_file['A']
