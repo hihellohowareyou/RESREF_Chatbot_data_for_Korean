@@ -7,7 +7,7 @@ class BertEncoder(BertPreTrainedModel):
         super(BertEncoder, self).__init__(config)
         # self.model = BertModel.from_pretrained(config)
         self.bert = BertModel(config)
-        self.layer = nn.Linear(768,2048)
+        self.layer = nn.Linear(768,1024)
         self.tanh = nn.Tanh()
         self.init_weights()
 
@@ -17,6 +17,5 @@ class BertEncoder(BertPreTrainedModel):
                             attention_mask=attention_mask
                             )
         pooled_output = outputs[1]
-        # pooled_output = self.layer(pooled_output)
         # result = torch.sum(pooled_output,1)/ 768
         return pooled_output
