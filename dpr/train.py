@@ -6,6 +6,11 @@ from model import BertEncoder
 import pandas as pd
 import torch.nn.functional as F
 
+
+def add_to(sentenct,tokenizer):
+    new_sentence = tokenizer.bos_token + sentenct + tokenizer.eos_token
+    return new_sentence
+
 class dprDataset(Dataset):
     def __init__(self,path,tokenizer,max_seq_len=512):
         self.max_seq_len = max_seq_len
@@ -14,7 +19,7 @@ class dprDataset(Dataset):
         self.eos_token = self.tokenizer.eos_token
         csv_file = pd.read_csv(path)
         print(f'before {len(csv_file)}')
-        csv_file = csv_file.drop_duplicates(['A'])
+        # csv_file = csv_file.drop_duplicates(['A'])
         print(f'after {len(csv_file)}')
         self.quesion = csv_file['Q']
         self.quesion = self.tokenizer(self.quesion.tolist(),padding=True,return_tensors='pt')
@@ -82,8 +87,7 @@ def train(args):
             loss.backward()
             optimizer.step()
             # scheduler.step()
-            if step % 50 == 0:
-                print(f'{epoch}epoch loss: {losses / (step)}')
+        print(f'{epoch}epoch loss: {losses / (step)}')
         losses = 0
         correct = 0
         step = 0
@@ -120,10 +124,10 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_name',type=str,default='../data/train_dataset', help='dataset')
     parser.add_argument('--warmup_steps',type=int,default=500, help='dataset')
     parser.add_argument('--weight_decay',type=float,default=0.01, help='dataset')
-    parser.add_argument('--learning_rate',type=float,default=10e-5, help='dataset')
-    parser.add_argument('--epochs',type=int,default=50, help='epochs')
+    parser.add_argument('--learning_rate',type=float,default=2e-5, help='dataset')
+    parser.add_argument('--epochs',type=int,default=100, help='epochs')
     parser.add_argument('--device',type=str,default='cuda', help='device')
-    parser.add_argument('--batch_size',type=str,default=20, help='batch_size')
+    parser.add_argument('--batch_size',type=str,default=40, help='batch_size')
     parser.add_argument('--seed',type=int,default=42, help='seed')
 
     args = parser.parse_args()
