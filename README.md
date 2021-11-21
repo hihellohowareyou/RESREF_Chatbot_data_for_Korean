@@ -1,4 +1,4 @@
-# jaebot
+git # jaebot
 
 
 구조 
