@@ -89,4 +89,4 @@ def main(args):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="Process some integers.")
-    parser.add_argument("--chactbot_type", type=int, default=20, help="chatbot type you can get generator,retriever, RESREF")
+    parser.add_argument("--chactbot_type", type=str, default="RESREF, help="chatbot type you can get generator,retriever, RESREF")
