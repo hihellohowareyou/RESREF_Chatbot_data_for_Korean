@@ -1,5 +1,3 @@
-git # jaebot
-
 
 RESREF(retriever and refine) 구조의 챗봇입니다.
 단 원 논문과 다르게 retriever로 dpr을 사용했고 generator로 bart를 사용했습니다.
