@@ -12,7 +12,7 @@ retriever, generator, generate and refine 구조의 챗봇을 체험해 볼 수 
 RESREF모델은 dpr/train.py로 retriever모델을 학습하고 train.py로 refine 모델을 학습한 이후에 사용할 수 있습니다.
 
 
-#reference
+## reference
 Retrieve and Refine: Improved Sequence Generation Models For Dialogue
 https://arxiv.org/abs/1808.04776
 Recipes for building an open-domain chatbot
