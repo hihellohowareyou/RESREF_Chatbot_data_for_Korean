@@ -12,25 +12,16 @@ from typing import List, Tuple, NoReturn, Any, Optional, Union
 from torch.utils.data import (DataLoader, RandomSampler, TensorDataset)
 
 from sklearn.feature_extraction.text import TfidfVectorizer
-from  transformers import AutoTokenizer
+from  transformers import AutoTokenizer,AutoModel
 from datasets import (
     Dataset,
     load_from_disk,
     concatenate_datasets,
 )
 
-from model import BertEncoder
-
-@contextmanager
-def timer(name):
-    t0 = time.time()
-    yield
-    print(f"[{name}] done in {time.time() - t0:.3f} s")
-
 class DPR:
     def __init__(
         self,
-        tokenize_fn,
         data_path: Optional[str] = "../Chatbot_data/ChatbotData.csv",
     ) -> NoReturn:
 
@@ -45,23 +36,18 @@ class DPR:
         self.indexer = None  # build_faiss()로 생성합니다.
 
     def del_models(self):
-        del self.p_encoder
-        del self.q_encoder
+        del self.encoder
 
-    def models(self,model_name,p_encoder_path,q_encoder_path):
+    def models(self,model_name,encoder_path):
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name,
             use_fast=False,
             stride=64,
             padding=True
         )
-        self.p_encoder = BertEncoder.from_pretrained(model_name)
-        self.p_encoder.load_state_dict(torch.load(p_encoder_path))
-        self.p_encoder.to('cuda')
-
-        self.q_encoder = BertEncoder.from_pretrained(model_name)
-        self.q_encoder.load_state_dict(torch.load(q_encoder_path))
-        self.q_encoder.to('cuda')
+        self.encoder = AutoModel.from_pretrained(model_name)
+        self.encoder.load_state_dict(torch.load(encoder_path))
+        self.encoder.to('cuda')
 
     def get_dense_embedding(self) -> NoReturn:
 
@@ -70,7 +56,7 @@ class DPR:
             Passage Embedding을 만들고
             TFIDF와 Embedding을 pickle로 저장합니다.
             만약 미리 저장된 파일이 있으면 저장된 pickle을 불러옵니다.
-        """
+        c"""
 
         # Pickle을 저장합니다.
         pickle_name = f"DPR.bin"
@@ -95,17 +81,17 @@ class DPR:
                             }
                 with torch.no_grad():
                     p_inputs = {k: v for k, v in p_inputs.items()}
-                    output = self.p_encoder(**p_inputs)
+                    output = self.encoder(**p_inputs)
                     if idx == 0:
-                        self.p_embedding = output
+                        self.p_embedding = output[1]
                     else:
-                        self.p_embedding = torch.cat((self.p_embedding, output), 0)
+                        self.p_embedding = torch.cat((self.p_embedding, output[1]), 0)
             print(self.p_embedding.shape)
             with open(emd_path, "wb") as file:
                 pickle.dump(self.p_embedding, file)
             print("Embedding pickle saved.")
 
-    def build_faiss(self, num_clusters=64) -> NoReturn:
+    def build_faiss(self, num_clusters=16) -> NoReturn:
 
         """
         Summary:
@@ -131,7 +117,6 @@ class DPR:
             p_emb = self.p_embedding.cpu().detach().numpy()
             emb_dim = p_emb.shape[-1]
 
-            num_clusters = num_clusters
             quantizer = faiss.IndexFlatL2(emb_dim)
             self.indexer = faiss.IndexIVFScalarQuantizer(
                 quantizer, quantizer.d, num_clusters, faiss.METRIC_INNER_PRODUCT
@@ -156,7 +141,7 @@ class DPR:
 
         q_input = self.tokenizer(query, padding="max_length", truncation=True, return_tensors='pt')
         q_input = {i: v.to('cuda') for i, v in q_input.items()}
-        query_vec = self.q_encoder(**q_input)
+        query_vec = self.encoder(**q_input)[1]
         assert (
             torch.sum(query_vec) != 0
         ), "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
@@ -194,7 +179,7 @@ class DPR:
                         'token_type_ids': q_input[2]}
             q_input = {i:v.to('cuda') for i,v in q_inputs.items()}
             with torch.no_grad():
-                output = self.q_encoder(**q_input)
+                output = self.encoder(**q_input)[1]
                 if idx == 0:
                     query_vec = output
                 else:
@@ -247,10 +232,9 @@ class DPR:
         queries = query_or_dataset["Q"]
         total = []
 
-        with timer("query faiss search"):
-            doc_scores, doc_indices = self.get_relevant_doc_bulk_faiss(
-                queries.tolist(), k=topk
-            )
+        doc_scores, doc_indices = self.get_relevant_doc_bulk_faiss(
+            queries.tolist(), k=topk
+        )
         for idx, example in tqdm(query_or_dataset.iterrows()):
             print(example['Q'])
             tmp = {
@@ -280,18 +264,16 @@ class DPR:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
 
-        with timer("transform"):
-            q_input = self.tokenizer(query, padding="max_length", truncation=True, return_tensors='pt')
-            q_input = {i: v.to('cuda') for i, v in q_input.items()}
-            query_vec = self.q_encoder(**q_input)
+        q_input = self.tokenizer(query, padding="max_length", truncation=True, return_tensors='pt')
+        q_input = {i: v.to('cuda') for i, v in q_input.items()}
+        query_vec = self.encoder(**q_input)[1]
         assert (
             torch.sum(query_vec) != 0
         ), "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
         if not isinstance(query_vec, np.ndarray):
             query_vec = query_vec.cpu().detach().numpy()
-        with timer("query faiss search"):
-            D, I = self.indexer.search(query_vec, k)
+        D, I = self.indexer.search(query_vec, k)
 
         return D.tolist()[0], I.tolist()[0]
 
@@ -318,7 +300,7 @@ class DPR:
                         }
             q_input = {i:v.to('cuda') for i,v in q_inputs.items()}
             with torch.no_grad():
-                output = self.q_encoder(**q_input)
+                output = self.encoder(**q_input)
                 if idx == 0:
                     query_vec = output
                 else:
@@ -334,14 +316,3 @@ class DPR:
 
         return D.tolist(), I.tolist()
 
-if __name__ == '__main__':
-    x = DPR(tokenize_fn='klue/bert-base')
-    x.models("klue/bert-base","retrieval_models/p_encoder.pt","retrieval_models/q_encoder.pt")
-    x.get_dense_embedding()
-    x.build_faiss()
-    doc = '.'
-    answer = x.get_relevant_doc(doc,5)
-    csv_file = pd.read_csv("../Chatbot_data/ChatbotData.csv")
-    answers = csv_file['A']
-    for i in answer[1]:
-        print(answers[i])
