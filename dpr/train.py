@@ -1,8 +1,7 @@
-from transformers import AutoTokenizer,AdamW
+from transformers import AutoTokenizer,AdamW,AutoModel
 import torch
 from torch.utils.data import random_split,DataLoader,Dataset
 from tqdm import tqdm
-from model import BertEncoder
 import pandas as pd
 import torch.nn.functional as F
 
@@ -39,10 +38,8 @@ class dprDataset(Dataset):
                 }
 
 def train(args):
-    q_encoder = BertEncoder.from_pretrained(args.model_name)
-    p_encoder = BertEncoder.from_pretrained(args.model_name)
-    q_encoder.to(args.device)
-    p_encoder.to(args.device)
+    encoder = AutoModel.from_pretrained(args.model_name)
+    encoder.to(args.device)
     no_decay = ["bias" ,"LayerNorm.weight"]
     dataset = dprDataset('../Chatbot_data/ChatbotData.csv',args.model_name)
     x = int(len(dataset) * 0.8)
@@ -51,10 +48,8 @@ def train(args):
     valid_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=True)
 
     optimizer_grouped_parameters = [
-        {"params": [p for n, p in p_encoder.named_parameters() if not any(nd in n for nd in no_decay)], "weight_decay": args.weight_decay},
-        {"params": [p for n, p in p_encoder.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
-        {"params": [p for n, p in q_encoder.named_parameters() if not any(nd in n for nd in no_decay)], "weight_decay": args.weight_decay},
-        {"params": [p for n, p in q_encoder.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0}
+        {"params": [p for n, p in encoder.named_parameters() if not any(nd in n for nd in no_decay)], "weight_decay": args.weight_decay},
+        {"params": [p for n, p in encoder.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
     ]
     optimizer = AdamW(
         optimizer_grouped_parameters,
@@ -73,16 +68,15 @@ def train(args):
                         'attention_mask': data['a_attention_mask'].to(args.device)
                         }
             targets = torch.arange(0, len(p_inputs['input_ids'])).long().to(args.device)
-            q_output = q_encoder(**q_inputs)
-            p_output = p_encoder(**p_inputs)
+            q_output = encoder(**q_inputs)[1]
+            p_output = encoder(**p_inputs)[1]
             retrieval = torch.matmul(q_output, p_output.T)
             loss = F.cross_entropy(retrieval, targets)
             # retrieval_scores = F.log_softmax(retrieval, dim=1)
             #
             # loss = F.nll_loss(retrieval_scores, targets)
             losses += loss.item()
-            q_encoder.zero_grad()
-            p_encoder.zero_grad()
+            encoder.zero_grad()
 
             loss.backward()
             optimizer.step()
@@ -101,8 +95,7 @@ def train(args):
                             }
 
                 targets = torch.arange(0, len(p_inputs['input_ids'])).long().to(args.device)
-                q_output = q_encoder(**q_inputs)
-                p_output = p_encoder(**p_inputs)
+                q_output = encoder(**q_inputs)[1]
 
                 retrieval = torch.matmul(q_output, p_output.T)
                 retrieval_scores = F.log_softmax(retrieval, dim=1)
@@ -119,7 +112,7 @@ def train(args):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--model_name',type=str,default='klue/bert-base',
+    parser.add_argument('--model_name',type=str,default='klue/roberta-large',
                         help='model name')
     parser.add_argument('--dataset_name',type=str,default='../data/train_dataset', help='dataset')
     parser.add_argument('--warmup_steps',type=int,default=500, help='dataset')
@@ -127,7 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate',type=float,default=2e-5, help='dataset')
     parser.add_argument('--epochs',type=int,default=100, help='epochs')
     parser.add_argument('--device',type=str,default='cuda', help='device')
-    parser.add_argument('--batch_size',type=str,default=40, help='batch_size')
+    parser.add_argument('--batch_size',type=str,default=128, help='batch_size')
     parser.add_argument('--seed',type=int,default=42, help='seed')
 
     args = parser.parse_args()
