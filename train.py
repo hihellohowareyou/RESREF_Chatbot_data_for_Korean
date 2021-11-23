@@ -1,28 +1,21 @@
 """ko-bart로 단순 generator"""
-from transformers import AutoTokenizer,Seq2SeqTrainingArguments,DataCollatorWithPadding,Seq2SeqTrainer,BartForConditionalGeneration,AutoModelForCausalLM
+from transformers import AutoTokenizer,Seq2SeqTrainingArguments,PreTrainedTokenizerFast,Seq2SeqTrainer,BartForConditionalGeneration,AutoModelForCausalLM
 from kobart import get_pytorch_kobart_model, get_kobart_tokenizer
 import torch
 from datasets import load_metric
 from dataset import retrieveAndRefineDateset
 
 def train(args):
-    model_name = "skt/ko-gpt-trinity-1.2B-v0.5"
+    model_name = "hyunwoongko/kobart"
     # model = AutoModelForCausalLM.from_pretrained(model_name)
-    model = BartForConditionalGeneration.from_pretrained(get_pytorch_kobart_model())
-    tokenizer = get_kobart_tokenizer()
-    # dataset = concatDateset('../Chatbot_data/ChatbotData.csv',get_kobart_tokenizer)
-    dataset = retrieveAndRefineDateset('../Chatbot_data/ChatbotData.csv')
-    # tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = BartForConditionalGeneration.from_pretrained(model_name)
+    # tokenizer = get_kobart_tokenizer()
+    dataset = retrieveAndRefineDateset('Chatbot_data/ChatbotData.csv')
+    tokenizer = PreTrainedTokenizerFast.from_pretrained(model_name)
     print(tokenizer)
     print(len(dataset))
     x = int(len(dataset) * 0.8)
     # train_set, val_set = torch.utils.data.random_split(dataset, [x,len(dataset)-x])
-    metric = load_metric("squad")
-    print(metric)
-
-    def compute_metrics(p):
-        x = metric.compute(predictions=p.predictions, references=p.label_ids)
-        x = {'eval_exact_match':x['exact_match'],'eval_f1':x['f1']}
     training_args = Seq2SeqTrainingArguments(
         output_dir="./results",  # output directory
         save_total_limit=2,  # number of total save model.
@@ -43,15 +36,11 @@ def train(args):
         # load_best_model_at_end=True,
         predict_with_generate= True,
     )
-    data_collator = DataCollatorWithPadding(
-        tokenizer, pad_to_multiple_of=16)
     trainer = Seq2SeqTrainer(
         model=model,
         args=training_args,
         train_dataset=dataset,
-        # eval_dataset=val_set ,
         tokenizer=tokenizer,
-        # compute_metrics=compute_metrics
 )
     trainer.train()
     trainer.save_model()

@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 import pandas as pd
-from kobart import get_kobart_tokenizer
+from transformers import PreTrainedTokenizerFast
 def add_to_special_tokens(sentenct, bos_token='<s>', eos_token='</s>'):
     """ add to special token in """
     new_sentence = bos_token + sentenct + eos_token
@@ -9,7 +9,7 @@ def add_to_special_tokens(sentenct, bos_token='<s>', eos_token='</s>'):
 class generatorDataset(Dataset):
     def __init__(self,path,max_seq_len=256):
         self.max_seq_len = max_seq_len
-        self.tokenizer = get_kobart_tokenizer()
+        self.tokenizer = PreTrainedTokenizerFast.from_pretrained("hyunwoongko/kobart")
         self.bos_token = self.tokenizer.bos_token
         print(self.bos_token)
         self.eos_token = self.tokenizer.eos_token

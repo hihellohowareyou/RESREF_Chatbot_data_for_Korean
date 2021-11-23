@@ -51,13 +51,9 @@ class DPR:
             stride=64,
             padding=True
         )
-        self.p_encoder = BertEncoder.from_pretrained(model_name)
-        self.p_encoder.load_state_dict(torch.load(p_encoder_path))
-        self.p_encoder.to('cuda')
-
-        self.q_encoder = BertEncoder.from_pretrained(model_name)
-        self.q_encoder.load_state_dict(torch.load(q_encoder_path))
-        self.q_encoder.to('cuda')
+        self.encoder = BertEncoder.from_pretrained(model_name)
+        self.encoder.load_state_dict(torch.load(p_encoder_path))
+        self.encoder.to('cuda')
 
     def get_dense_embedding(self) -> NoReturn:
 
@@ -91,7 +87,7 @@ class DPR:
                             }
                 with torch.no_grad():
                     p_inputs = {k: v for k, v in p_inputs.items()}
-                    output = self.p_encoder(**p_inputs)
+                    output = self.encoder(**p_inputs)
                     if idx == 0:
                         self.p_embedding = output
                     else:
@@ -154,7 +150,7 @@ class DPR:
         with timer("transform"):
             q_input = self.tokenizer(query, padding="max_length", truncation=True, return_tensors='pt')
             q_input = {i: v.to('cuda') for i, v in q_input.items()}
-            query_vec = self.q_encoder(**q_input)
+            query_vec = self.encoder(**q_input)
         assert (
             torch.sum(query_vec) != 0
         ), "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
@@ -193,7 +189,7 @@ class DPR:
                         'token_type_ids': q_input[2]}
             q_input = {i:v.to('cuda') for i,v in q_inputs.items()}
             with torch.no_grad():
-                output = self.q_encoder(**q_input)
+                output = self.encoder(**q_input)
                 if idx == 0:
                     query_vec = output
                 else:
@@ -302,7 +298,7 @@ class DPR:
         with timer("transform"):
             q_input = self.tokenizer(query, padding="max_length", truncation=True, return_tensors='pt')
             q_input = {i: v.to('cuda') for i, v in q_input.items()}
-            query_vec = self.q_encoder(**q_input)
+            query_vec = self.encoder(**q_input)
         assert (
             torch.sum(query_vec) != 0
         ), "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
@@ -337,7 +333,7 @@ class DPR:
                         'token_type_ids': q_input[2]}
             q_input = {i:v.to('cuda') for i,v in q_inputs.items()}
             with torch.no_grad():
-                output = self.q_encoder(**q_input)
+                output = self.encoder(**q_input)
                 if idx == 0:
                     query_vec = output
                 else:
@@ -353,14 +349,3 @@ class DPR:
 
         return D.tolist(), I.tolist()
 
-if __name__ == '__main__':
-    x = DPR(tokenize_fn='klue/bert-base')
-    x.models("klue/bert-base","retrieval_models/p_encoder.pt","retrieval_models/q_encoder.pt")
-    x.get_dense_embedding()
-    x.build_faiss()
-    doc = '취업할 수 있을까?'
-    answer = x.get_relevant_doc(doc,5)
-    csv_file = pd.read_csv("../Chatbot_data/ChatbotData.csv")
-    answers = csv_file['A']
-    for i in answer[1]:
-        print(answers[i])

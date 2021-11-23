@@ -38,6 +38,8 @@ class dprDataset(Dataset):
                 }
 
 def train(args):
+    # q_encoder = BertEncoder.from_pretrained(args.model_name)
+    # p_encoder = BertEncoder.from_pretrained(args.model_name)
     encoder = AutoModel.from_pretrained(args.model_name)
     encoder.to(args.device)
     no_decay = ["bias" ,"LayerNorm.weight"]
@@ -45,7 +47,7 @@ def train(args):
     x = int(len(dataset) * 0.8)
     train_set, val_set = random_split(dataset, [x, len(dataset) - x])
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True)
-    valid_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=True)
+    valid_loader = DataLoader(val_set, batch_size=20, shuffle=True)
 
     optimizer_grouped_parameters = [
         {"params": [p for n, p in encoder.named_parameters() if not any(nd in n for nd in no_decay)], "weight_decay": args.weight_decay},
@@ -87,15 +89,16 @@ def train(args):
         step = 0
         for data in tqdm(valid_loader):
             with torch.no_grad():
-                p_inputs = {'input_ids': data['q_input_ids'].to(args.device),
-                            'attention_mask': data['q_attention_mask'].to(args.device)
-                            }
                 q_inputs = {'input_ids': data['a_input_ids'].to(args.device),
                             'attention_mask': data['a_attention_mask'].to(args.device)
+                            }
+                p_inputs = {'input_ids': data['q_input_ids'].to(args.device),
+                            'attention_mask': data['q_attention_mask'].to(args.device)
                             }
 
                 targets = torch.arange(0, len(p_inputs['input_ids'])).long().to(args.device)
                 q_output = encoder(**q_inputs)[1]
+                p_output = encoder(**p_inputs)[1]
 
                 retrieval = torch.matmul(q_output, p_output.T)
                 retrieval_scores = F.log_softmax(retrieval, dim=1)
@@ -107,6 +110,7 @@ def train(args):
                 losses += loss.item()
                 step += 1
         print(f'valid {epoch}epoch loss: {losses / (step)},acc:{correct/len(val_set)}')
+        torch.save(encoder.state_dict(), 'retrieval_models/encoder.pt')
 
 
 if __name__ == '__main__':
@@ -117,10 +121,10 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_name',type=str,default='../data/train_dataset', help='dataset')
     parser.add_argument('--warmup_steps',type=int,default=500, help='dataset')
     parser.add_argument('--weight_decay',type=float,default=0.01, help='dataset')
-    parser.add_argument('--learning_rate',type=float,default=2e-5, help='dataset')
-    parser.add_argument('--epochs',type=int,default=100, help='epochs')
+    parser.add_argument('--learning_rate',type=float,default=6e-6, help='dataset')
+    parser.add_argument('--epochs',type=int,default=20, help='epochs')
     parser.add_argument('--device',type=str,default='cuda', help='device')
-    parser.add_argument('--batch_size',type=str,default=128, help='batch_size')
+    parser.add_argument('--batch_size',type=str,default=64, help='batch_size')
     parser.add_argument('--seed',type=int,default=42, help='seed')
 
     args = parser.parse_args()

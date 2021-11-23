@@ -2,8 +2,8 @@ import random
 from torch.utils.data import Dataset
 import pandas as pd
 from kobart import get_kobart_tokenizer
-from transformers import AutoTokenizer
-from tqdm.tqdm import tqdm
+from transformers import PreTrainedTokenizerFast
+from tqdm import tqdm
 from retrieval import DPR
 
 def add_to_special_tokens(sentenct, bos_token='<s>', eos_token='</s>'):
@@ -13,31 +13,28 @@ def add_to_special_tokens(sentenct, bos_token='<s>', eos_token='</s>'):
 
 class retrieveAndRefineDateset(Dataset):
     def __init__(self,data_path):
-        # x.models("klue/bert-base", "../dpr/retrieval_models/p_encoder.pt", "../dpr/retrieval_models/q_encoder.pt")
-        # x.get_dense_embedding()
-        self.tokenizer = get_kobart_tokenizer()
-        # x.build_faiss()
+        self.tokenizer = PreTrainedTokenizerFast.from_pretrained("hyunwoongko/kobart")
+
         data = pd.read_csv(data_path)
-        self.concat = data['A'].map(add_to_special_tokens) + data['Q'].map(add_to_special_tokens)
-        self.question = data['Q']
-        self.answer = data['A']
+        self.answer = data['A'].map(add_to_special_tokens)
+        self.question = data['Q'].map(add_to_special_tokens)
+        self.concat = self.answer + self.question
         self.random_retirver()
-        self.concat = self.concat.map(add_to_special_tokens)
 
         print(self.concat)
         self.concat = self.tokenizer(self.concat.tolist(),padding=True,return_tensors='pt')
         self.answer = self.tokenizer(self.answer.tolist(),padding=True,return_tensors='pt')
 
     def random_retirver(self):
-        x = DPR(tokenize_fn='klue/roberta-large')
-        x.models("klue/roberta-large", "../dpr/retrieval_models/encoder.pt")
+        x = DPR()
+        x.models("klue/roberta-large", "dpr/retrieval_models/encoder.pt")
         x.get_dense_embedding()
         x.build_faiss()
         for i in tqdm(range(len(self.question))):
-            if random.random() <0.3:
+            if random.random() < 0.3:
                 _,retrieve = x.get_relevant_doc(self.question[i])
                 retrieve = self.answer[retrieve[0]]
-                self.concat[i] = self.question[i] +'</s><s>' + retrieve
+                self.concat[i] = self.question[i]  + retrieve
         x.del_models()
 
     def __len__(self):

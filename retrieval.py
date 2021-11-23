@@ -22,7 +22,7 @@ from datasets import (
 class DPR:
     def __init__(
         self,
-        data_path: Optional[str] = "../Chatbot_data/ChatbotData.csv",
+        data_path: Optional[str] = "Chatbot_data/ChatbotData.csv",
     ) -> NoReturn:
 
         self.data_path = data_path
